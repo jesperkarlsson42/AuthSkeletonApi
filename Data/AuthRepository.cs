@@ -1,6 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using AspNetAuthApi.Models;
 using AspNetAuthApi.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 namespace AspNetAuthApi.Data
 {
@@ -31,7 +34,8 @@ namespace AspNetAuthApi.Data
             }
             else
             {
-                response.Data = user.Id.ToString();
+    
+                response.Data = CreateToken(user);
                 return response;
             }
 
@@ -55,6 +59,7 @@ namespace AspNetAuthApi.Data
             await _context.SaveChangesAsync();
 
             response.Data = user.Id;
+            response.Message = "User has been created.";
             return response;
 
         }
@@ -94,6 +99,37 @@ namespace AspNetAuthApi.Data
 
                 return true;
             }
+        }
+
+        private string CreateToken(User user)
+        {
+
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username)
+            };
+
+            DotNetEnv.Env.Load();
+            var TokenKey = System.Environment.GetEnvironmentVariable("SECRET_KEY");
+            if (string.IsNullOrEmpty(TokenKey))
+            {
+                throw new Exception("Error getting vaildating token security key");
+            }
+
+            var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(TokenKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = System.DateTime.Now.AddDays(1),
+                SigningCredentials = creds
+            };
+
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
         }
     }
 }
